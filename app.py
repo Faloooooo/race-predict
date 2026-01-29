@@ -1,57 +1,69 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 import random
 
-# السرعات الأصلية
-data = {
-    "Car": {"desert": 132, "highway": 290.4, "bumpy": 98.4, "expressway": 264, "dirt": 153.6, "potholes": 67.2},
-    "Sport": {"desert": 96, "highway": 480, "bumpy": 168, "expressway": 432, "dirt": 360, "potholes": 57.6},
-    "Super": {"desert": 62.4, "highway": 528, "bumpy": 151.2, "expressway": 480, "dirt": 264, "potholes": 52.8},
-    "Bigbike": {"desert": 132, "highway": 230.4, "bumpy": 259.2, "expressway": 264, "dirt": 165.6, "potholes": 187.2},
-    "Moto": {"desert": 72, "highway": 225.6, "bumpy": 108, "expressway": 220.8, "dirt": 144, "potholes": 96},
-    "Orv": {"desert": 58.08, "highway": 240, "bumpy": 218.4, "expressway": 286, "dirt": 220.8, "potholes": 134.4},
-    "Suv": {"desert": 139.2, "highway": 360, "bumpy": 213.6, "expressway": 348, "dirt": 336, "potholes": 110.4},
-    "Truck": {"desert": 98.28, "highway": 276, "bumpy": 216, "expressway": 240, "dirt": 87.6, "potholes": 108},
-    "Atv": {"desert": 168, "highway": 115.2, "bumpy": 187.2, "expressway": 115.2, "dirt": 187.2, "potholes": 144}
-}
+# إعداد الصفحة والاتصال بجوجل شيت
+st.set_page_config(page_title="Race Predictor Pro", layout="wide")
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-road_types = ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"]
+# تحميل البيانات الموجودة في الجدول حالياً
+try:
+    existing_data = conn.read(ttl=0) # ttl=0 لضمان جلب أحدث البيانات دائماً
+except:
+    existing_data = pd.DataFrame(columns=["Car1", "Car2", "Car3", "Road_L", "Road_C", "Road_R", "Long_Pos", "Winner"])
 
-st.title("🏎️ المحلل الذكي: التوقع الاستباقي")
+st.title("🏎️ خوارزمية السباق الذكية (L-C-R Analysis)")
 
-# إدخال المعطيات المتوفرة فقط
-st.subheader("📝 المعطيات المتاحة قبل السباق")
-col1, col2, col3 = st.columns(3)
-with col1: v1 = st.selectbox("السيارة 1", list(data.keys()), index=0)
-with col2: v2 = st.selectbox("السيارة 2", list(data.keys()), index=1)
-with col3: v3 = st.selectbox("السيارة 3", list(data.keys()), index=2)
-
-known_road = st.selectbox("ما هو الطريق الظاهر أمامك؟", road_types)
-
-if st.button("🔮 تحليل احتمالات الفوز"):
-    participants = [v1, v2, v3]
-    scores = {v1: 0, v2: 0, v3: 0}
+# --- القسم 1: التوقع الاستباقي ---
+with st.container():
+    st.subheader("🔮 توقع الجولة القادمة")
+    col_v, col_r = st.columns([2, 1])
     
-    # محاكاة لـ 500 سيناريو مختلف للطرق المخفية
-    for _ in range(500):
-        r2 = random.choice(road_types)
-        r3 = random.choice(road_types)
-        roads = [known_road, r2, r3]
-        long_idx = random.randint(0, 2) # احتمال عشوائي لمكان الطريق الطويل
-        
-        dists = [100, 100, 100]
-        dists[long_idx] = 200
-        
-        temp_results = []
-        for p in participants:
-            time = sum(dists[i] / data[p][roads[i]] for i in range(3))
-            temp_results.append((p, time))
-        
-        temp_results.sort(key=lambda x: x[1])
-        winner = temp_results[0][0]
-        scores[winner] += 1
+    with col_v:
+        c1 = st.selectbox("السيارة الأولى", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key="v1")
+        c2 = st.selectbox("السيارة الثانية", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key="v2")
+        c3 = st.selectbox("السيارة الثالثة", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key="v3")
     
-    st.write("### 📊 نسبة احتمال فوز كل سيارة:")
-    for p in participants:
-        prob = (scores[p] / 500) * 100
-        st.write(f"**{p}**: {prob:.1f}%")
-        st.progress(prob / 100)
+    with col_r:
+        known_road = st.selectbox("الطريق الظاهر الآن", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
+        pos = st.radio("موقع الطريق الظاهر", ["L (شمال)", "C (وسط)", "R (يمين)"])
+
+    if st.button("🚀 تحليل الاحتمالات"):
+        # هنا الكود يحلل الأنماط التاريخية
+        # إذا وجد أن اللعبة تضع "Truck" كفائز عندما يكون الطريق الأول "Dirt" في جهة "L"
+        # سيعطيها نسبة أعلى.
+        st.info("جاري تحليل النمط التاريخي بناءً على {} جولة سابقة...".format(len(existing_data)))
+        # (كود المحاكاة المتقدم سيضاف هنا)
+
+st.markdown("---")
+
+# --- القسم 2: تسجيل الداتا (بعد انتهاء الجولة) ---
+with st.expander("📥 تسجيل نتائج الجولة بدقة (تغذية الذكاء الاصطناعي)"):
+    st.write("أدخل ما حدث في الجولة الفعلية لفك شفرة الخوارزمية:")
+    
+    c_list = ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"]
+    r_list = ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"]
+    
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        res_l = st.selectbox("طريق الشمال (L)", r_list, key="res_l")
+    with col_b:
+        res_c = st.selectbox("طريق الوسط (C)", r_list, key="res_c")
+    with col_c:
+        res_r = st.selectbox("طريق اليمين (R)", r_list, key="res_r")
+    
+    long_pos = st.radio("أين كان الطريق الأطول؟", ["L", "C", "R"], horizontal=True)
+    actual_winner = st.selectbox("من فاز فعلياً؟", c_list)
+
+    if st.button("✅ حفظ وتحديث الخوارزمية"):
+        new_row = pd.DataFrame([{
+            "Car1": c1, "Car2": c2, "Car3": c3,
+            "Road_L": res_l, "Road_C": res_c, "Road_R": res_r,
+            "Long_Pos": long_pos, "Winner": actual_winner
+        }])
+        
+        updated_df = pd.concat([existing_data, new_row], ignore_index=True)
+        conn.update(data=updated_df)
+        st.success("تم الحفظ في Google Sheets بنجاح! شكراً لمساهمتك في تطوير الذكاء.")
+        st.balloons()
