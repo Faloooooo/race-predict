@@ -5,7 +5,8 @@ import requests
 # الإعدادات المحدثة لروابطك الفعلية
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdtEDDxzbU8rHiFZCv72KKrosr49PosBVNUiRHnfNKSpC4RDg/formResponse"
 # رابط القراءة من جدولك الجديد
-SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/1qzX6F4l4wBv6_cGvKLdUFayy1XDcg0QxjjEmxddxPTo/export?format=csv"
+# الرابط المحدث للقراءة العامه
+SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/1qzX6F4l4wBv6_cGvKLdUFayy1XDcg0QxjjEmxddxPTo/export?format=csv&gid=0"
 
 st.set_page_config(page_title="Race Intelligence Pro", page_icon="🏎️", layout="wide")
 
