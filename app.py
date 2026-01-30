@@ -2,96 +2,102 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# الروابط الرسمية الخاصة بك
+# الروابط الرسمية (تم التأكد منها من رابط المعاينة الخاص بك)
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdtEDDxzbU8rHiFZCv72KKrosr49PosBVNUiRHnfNKSpC4RDg/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/1qzX6F4l4wBv6_cGvKLdUFayy1XDcg0QxjjEmxddxPTo/export?format=csv"
 
-st.set_page_config(page_title="Race Logic Master V5.4", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="Race Master Pro V5.5", layout="wide", page_icon="🏎️")
 
-# جلب البيانات مع تحديث فوري
+# دالة جلب البيانات مع تجاوز التخزين المؤقت
 @st.cache_data(ttl=1)
 def fetch_data():
     try:
         url = f"{SHEET_READ_URL}&t={pd.Timestamp.now().timestamp()}"
-        df_read = pd.read_csv(url)
-        return df_read
+        return pd.read_csv(url)
     except:
         return pd.DataFrame()
 
 df = fetch_data()
 
-# --- الإحصائيات الجانبية ---
-st.sidebar.title("📊 مركز التحليل")
+# --- القائمة الجانبية: تحليل الأداء ---
+st.sidebar.title("📈 لوحة التحكم")
 if not df.empty:
-    total = len(df)
-    st.sidebar.metric("🔢 إجمالي الجولات", total)
+    total_races = len(df.dropna(subset=[df.columns[1]]))
+    st.sidebar.metric("🔢 إجمالي السباقات", total_races)
+    
+    # حساب الدقة من العمود J (Index 9) مقارنة بالفائز الفعلي I (Index 8)
     if df.shape[1] >= 10:
-        # مقارنة الفائز (I) مع التوقع (J)
-        actual = df.iloc[:, 8].astype(str).str.strip()
-        predicted = df.iloc[:, 9].astype(str).str.strip()
-        correct = (actual == predicted).sum()
-        accuracy = (correct / total) * 100 if total > 0 else 0
-        st.sidebar.metric("🎯 نسبة الدقة الحقيقية", f"{round(accuracy, 1)}%")
+        valid_rows = df.dropna(subset=[df.columns[8], df.columns[9]])
+        if not valid_rows.empty:
+            correct = (valid_rows.iloc[:, 8].astype(str).str.strip() == 
+                       valid_rows.iloc[:, 9].astype(str).str.strip()).sum()
+            acc = (correct / len(valid_rows)) * 100
+            st.sidebar.metric("🎯 دقة الخوارزمية", f"{round(acc, 1)}%")
 
-# --- واجهة التنبؤ ---
-st.title("🔮 الخوارزمية الذكية")
+# --- واجهة التوقع الذكي ---
+st.title("🧠 محرك التنبؤ بالسباقات")
 
 with st.container(border=True):
-    st.subheader("🏁 مدخلات ما قبل الانطلاق")
-    c_v = st.columns(3)
-    v1 = c_v[0].selectbox("L (1)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key="v1")
-    v2 = c_v[1].selectbox("C (2)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key="v2")
-    v3 = c_v[2].selectbox("R (3)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key="v3")
+    col_cars = st.columns(3)
+    v1 = col_cars[0].selectbox("سيارة اليسار (L)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key="v1")
+    v2 = col_cars[1].selectbox("سيارة الوسط (C)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key="v2")
+    v3 = col_cars[2].selectbox("سيارة اليمين (R)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key="v3")
     
-    vis_pos = st.radio("موقع الطريق المرئي 4", ["L", "C", "R"], horizontal=True)
-    vis_type = st.selectbox("نوع الطريق المرئي 5", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
+    col_road = st.columns(2)
+    vis_pos = col_road[0].radio("موقع الطريق المرئي", ["L", "C", "R"], horizontal=True)
+    vis_type = col_road[1].selectbox("نوع الطريق المرئي", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
 
-    # منطق الخوارزمية (سيتطور بناءً على عمود J)
-    current_prediction = v1
+    # خوارزمية البحث عن النمط (Pattern Recognition)
+    prediction = v1
     if not df.empty:
-        pos_map = {"L": 3, "C": 4, "R": 5}
-        idx = pos_map[vis_pos]
-        matches = df[df.iloc[:, idx] == vis_type]
-        if not matches.empty:
-            sub = matches[matches.iloc[:, 8].isin([v1, v2, v3])]
-            current_prediction = sub.iloc[:, 8].value_counts().idxmax() if not sub.empty else df[df.iloc[:, 8].isin([v1, v2, v3])].iloc[:, 8].mode()[0]
-
-    st.subheader(f"🏆 الفائز المتوقع: :green[{current_prediction}]")
-
-# --- واجهة التدوين ---
-st.divider()
-st.subheader("📝 تدوين النتائج الفعلية")
-others = [p for p in ["L", "C", "R"] if p != vis_pos]
-c_hid = st.columns(2)
-h1_t = c_hid[0].selectbox(f"طريق {others[0]} (6)", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h1")
-h2_t = c_hid[1].selectbox(f"طريق {others[1]} (7)", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h2")
-
-lp_pos = st.radio("الأطول فعلياً (8)", ["L", "C", "R"], horizontal=True)
-actual_w = st.selectbox("الفائز الفعلي (9)", [v1, v2, v3])
-
-# الإرسال باستخدام المعرفات الصحيحة التي أثبتت نجاحها يدوياً
-if st.button("✅ حفظ وتدوين التوقع في العمود J (رقم 10)", use_container_width=True):
-    roads = {vis_pos: vis_type, others[0]: h1_t, others[1]: h2_t}
+        # البحث في التاريخ عن نفس نوع الطريق المرئي في نفس الموقع
+        pos_idx = {"L": 4, "C": 5, "R": 6} # ترتيب الأعمدة في الشيت الخاص بك
+        match_idx = pos_idx[vis_pos]
+        history = df[df.iloc[:, match_idx] == vis_type]
+        if not history.empty:
+            # فلترة النتائج للسيارات الثلاث الحالية فقط
+            potential_winners = history[history.iloc[:, 8].isin([v1, v2, v3])]
+            if not potential_winners.empty:
+                prediction = potential_winners.iloc[:, 8].value_counts().idxmax()
     
+    st.subheader(f"🏁 التوقع البرمجي: :green[{prediction}]")
+
+# --- واجهة إدخال النتائج ---
+st.divider()
+st.subheader("📝 تسجيل بيانات الجولة المكتملة")
+
+others = [p for p in ["L", "C", "R"] if p != vis_pos]
+col_hidden = st.columns(2)
+h1_type = col_hidden[0].selectbox(f"نوع طريق {others[0]} (مخفي)", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h1")
+h2_type = col_hidden[1].selectbox(f"نوع طريق {others[1]} (مخفي)", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h2")
+
+col_final = st.columns(2)
+lp_pos = col_final[0].radio("موقع المسار الأطول", ["L", "C", "R"], horizontal=True)
+actual_winner = col_final[1].selectbox("الفائز الفعلي في السباق", [v1, v2, v3])
+
+if st.button("🚀 تدوين البيانات وحفظ التوقع في العمود J", use_container_width=True):
+    # ترتيب أنواع الطرق بناءً على مواقعها الثابتة L, C, R
+    road_map = {vis_pos: vis_type, others[0]: h1_type, others[1]: h2_type}
+    
+    # حزمة البيانات الموحدة (إرسال كل شيء في طلب واحد لضمان سطر واحد)
     payload = {
-        "entry.1815594157": str(v1),
-        "entry.1382952591": str(v2),
-        "entry.734801074": str(v3),
-        "entry.189628538": str(roads["L"]),
-        "entry.725223032": str(roads["C"]),
-        "entry.1054834699": str(roads["R"]),
-        "entry.21622378": str(lp_pos),
-        "entry.77901429": str(actual_w),
-        "entry.1444222044": str(current_prediction)  # هذا المعرف هو الذي استقبل رسالتك "تريد حلاً سريعاً"
+        "entry.1815594157": v1,
+        "entry.1382952591": v2,
+        "entry.734801074": v3,
+        "entry.189628538": road_map["L"],
+        "entry.725223032": road_map["C"],
+        "entry.1054834699": road_map["R"],
+        "entry.21622378": lp_pos,
+        "entry.77901429": actual_winner,
+        "entry.1444222044": prediction # حقل Prediction الذي يصب في العمود J
     }
     
     try:
-        # إرسال البيانات بطريقة تحاكي ضغطة الزر في المتصفح
         response = requests.post(FORM_URL, data=payload)
         if response.status_code == 200:
-            st.success(f"تم الحفظ! التوقع ({current_prediction}) سُجل الآن في العمود J.")
+            st.success(f"✅ تم بنجاح! التوقع ({prediction}) سُجل في نفس سطر الفائز ({actual_winner}) بالعمود J.")
             st.balloons()
         else:
-            st.error("جوجل رفض الاستلام، يرجى التأكد من عدم إغلاق النموذج.")
+            st.error("فشل الإرسال. تأكد من اتصال الإنترنت.")
     except:
-        st.error("فشل الاتصال بالخادم.")
+        st.error("حدث خطأ في الخادم.")
