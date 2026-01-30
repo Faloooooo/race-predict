@@ -6,7 +6,7 @@ import requests
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdtEDDxzbU8rHiFZCv72KKrosr49PosBVNUiRHnfNKSpC4RDg/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/1qzX6F4l4wBv6_cGvKLdUFayy1XDcg0QxjjEmxddxPTo/export?format=csv"
 
-st.set_page_config(page_title="Race Logic Master V4.5", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="Race Logic Master V4.6", layout="wide", page_icon="🧠")
 
 @st.cache_data(ttl=2)
 def fetch_data():
@@ -19,13 +19,13 @@ def fetch_data():
 
 df = fetch_data()
 
-# --- القائمة الجانبية (ثبات العداد والنسبة) ---
+# --- القائمة الجانبية (العداد والنسبة) ---
 st.sidebar.title("📊 إحصائيات النظام")
 if not df.empty:
     total_races = len(df)
     st.sidebar.metric("🔢 إجمالي الجولات", total_races)
     
-    # حساب النسبة بمقارنة العمود I بالعمود J
+    # حساب النسبة بمقارنة العمود I (الفائز) بالعمود J (التوقع)
     if total_races > 0 and df.shape[1] >= 10:
         actual = df.iloc[:, 8].astype(str).str.strip()
         predicted = df.iloc[:, 9].astype(str).str.strip()
@@ -34,7 +34,7 @@ if not df.empty:
         st.sidebar.metric("🎯 نسبة الدقة الحقيقية", f"{round(accuracy, 1)}%")
         st.sidebar.progress(min(accuracy/100, 1.0))
 
-# --- الجزء العلوي: التوقع ---
+# --- الجزء العلوي: مدخلات التوقع ---
 st.title("🔮 التنبؤ وبناء الخوارزمية")
 
 with st.container(border=True):
@@ -49,8 +49,7 @@ with st.container(border=True):
     vis_pos = col_vis.radio("موقع الطريق المرئي 4", ["L", "C", "R"], horizontal=True)
     vis_type = col_type.selectbox("نوع الطريق المرئي 5", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
 
-    # خوارزمية التوقع (لا تعديل جوهري)
-    predicted_winner = "N/A"
+    # حساب التوقع وتخزينه في session_state لضمان ثباته عند الإرسال
     if not df.empty:
         pos_map = {"L": 3, "C": 4, "R": 5}
         idx = pos_map[vis_pos]
@@ -58,16 +57,17 @@ with st.container(border=True):
         if not matches.empty:
             sub_match = matches[matches.iloc[:, 8].isin([v1, v2, v3])]
             if not sub_match.empty:
-                predicted_winner = sub_match.iloc[:, 8].value_counts().idxmax()
+                st.session_state.current_pred = sub_match.iloc[:, 8].value_counts().idxmax()
             else:
-                history_wins = df[df.iloc[:, 8].isin([v1, v2, v3])].iloc[:, 8]
-                predicted_winner = history_wins.mode()[0] if not history_wins.empty else v1
+                st.session_state.current_pred = df[df.iloc[:, 8].isin([v1, v2, v3])].iloc[:, 8].mode()[0]
         else:
-            predicted_winner = v1
+            st.session_state.current_pred = v1
+    else:
+        st.session_state.current_pred = v1
 
-    st.subheader(f"🏆 الفائز المتوقع: :green[{predicted_winner}]")
+    st.subheader(f"🏆 الفائز المتوقع: :green[{st.session_state.current_pred}]")
 
-# --- الجزء السفلي: التدوين ---
+# --- الجزء السفلي: تدوين النتائج ---
 st.divider()
 st.subheader("📝 تدوين نتائج الجولة (كشف الطرق المخفية)")
 others = [p for p in ["L", "C", "R"] if p != vis_pos]
@@ -80,11 +80,10 @@ col_res1, col_res2 = st.columns(2)
 lp_pos = col_res1.radio("موقع الطريق الأطول فعلياً 8", ["L", "C", "R"], horizontal=True)
 actual_winner = col_res2.selectbox("الفائز الفعلي 9", [v1, v2, v3])
 
-if st.button("✅ حفظ في السجل التاريخي وتدوين التوقع J", use_container_width=True):
-    # ترتيب المسارات بدقة للإرسال
+if st.button("✅ حفظ في السجل التاريخي وتدوين التوقع 10", use_container_width=True):
     roads = {vis_pos: vis_type, others[0]: h1_type, others[1]: h2_type}
     
-    # الـ ID المباشر للعمود J هو 1017387431
+    # تحضير البيانات بدقة للإرسال
     payload = {
         "entry.1815594157": v1, 
         "entry.1382952591": v2, 
@@ -94,15 +93,15 @@ if st.button("✅ حفظ في السجل التاريخي وتدوين التو�
         "entry.1054834699": roads["R"],
         "entry.21622378": lp_pos, 
         "entry.77901429": actual_winner,
-        "entry.1017387431": str(predicted_winner) # التأكد من إرسال التوقع كـ نص للعمود J
+        "entry.1017387431": st.session_state.current_pred  # إرسال القيمة المخزنة في الذاكرة اللحظية
     }
     
     try:
         response = requests.post(FORM_URL, data=payload)
         if response.ok:
-            st.success(f"تم الحفظ! التوقع ({predicted_winner}) تم دفعه للعمود J بنجاح.")
+            st.success(f"تم الحفظ! التوقع ({st.session_state.current_pred}) ظهر الآن في العمود J.")
             st.balloons()
         else:
-            st.error("فشل الإرسال، يرجى التحقق من اتصال الإنترنت.")
+            st.error("فشل في الإرسال للنموذج.")
     except Exception as e:
         st.error(f"حدث خطأ: {e}")
