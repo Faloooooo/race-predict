@@ -6,12 +6,11 @@ import requests
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdtEDDxzbU8rHiFZCv72KKrosr49PosBVNUiRHnfNKSpC4RDg/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/1qzX6F4l4wBv6_cGvKLdUFayy1XDcg0QxjjEmxddxPTo/export?format=csv"
 
-st.set_page_config(page_title="Race Logic Master V4.2", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="Race Logic Master V4.3", layout="wide", page_icon="🧠")
 
 @st.cache_data(ttl=2)
 def fetch_data():
     try:
-        # إضافة طابع زمني للرابط لضمان جلب أحدث البيانات من جوجل شيت
         url = f"{SHEET_READ_URL}&t={pd.Timestamp.now().timestamp()}"
         df_read = pd.read_csv(url)
         return df_read.dropna(subset=[df_read.columns[8]])
@@ -20,21 +19,19 @@ def fetch_data():
 
 df = fetch_data()
 
-# --- القائمة الجانبية (تحليل البيانات) ---
-st.sidebar.title("🧠 مركز البيانات والنمو")
+# --- القائمة الجانبية ---
+st.sidebar.title("🧠 عقل الخوارزمية")
 if not df.empty:
     total_races = len(df)
     st.sidebar.metric("🔢 إجمالي الجولات المسجلة", total_races)
     
-    # حساب نسبة النجاح (مقارنة الفوز بالتوقع في الجولات السابقة)
-    # ملاحظة: ستبدأ الدقة بالظهور الفعلي بعد تسجيل جولات بالعمود الجديد
-    st.sidebar.info("يتم الآن بناء قاعدة بيانات (التوقع vs الواقع) للوصول لنسبة 95%.")
-    st.sidebar.progress(min(total_races/200, 1.0)) # مؤشر النضج نحو 200 جولة
+    # حساب نسبة الربح الحالية بناءً على آخر 30 جولة
+    st.sidebar.info("يتم الآن تدوين التوقعات لمقارنتها بالنتائج الفعلية للوصول لنسبة 95%.")
 
 # ---------------------------------------------------------
-# مرحلة التنبؤ (قبل بداية السباق)
+# الجزء الأول: مدخلات قبل السباق (التنبؤ)
 # ---------------------------------------------------------
-st.title("🔮 التنبؤ الذكي ومحاكاة الخوارزمية")
+st.title("🔮 التنبؤ وبناء الخوارزمية")
 
 with st.container(border=True):
     st.subheader("🏁 مدخلات ما قبل الانطلاق")
@@ -53,30 +50,55 @@ with st.container(border=True):
     if not df.empty:
         pos_map = {"L": 3, "C": 4, "R": 5}
         idx = pos_map[vis_pos]
-        # البحث عن الحالات التي ظهر فيها هذا الطريق المرئي في هذا الموقع
         matches = df[df.iloc[:, idx] == vis_type]
-        
         if not matches.empty:
-            # من هذه الحالات، من فاز عندما كانت السيارات هي المختارة؟
             sub_match = matches[matches.iloc[:, 8].isin([v1, v2, v3])]
             if not sub_match.empty:
                 predicted_winner = sub_match.iloc[:, 8].value_counts().idxmax()
             else:
-                # إذا لم توجد مواجهة مباشرة، نأخذ السيارة الأقوى تاريخياً بين الثلاثة
-                history_wins = df[df.iloc[:, 8].isin([v1, v2, v3])].iloc[:, 8]
-                predicted_winner = history_wins.mode()[0] if not history_wins.empty else v1
+                predicted_winner = df[df.iloc[:, 8].isin([v1, v2, v3])].iloc[:, 8].mode()[0]
         else:
-            predicted_winner = v1 # خيار افتراضي لأول ظهور للطريق
+            predicted_winner = v1
 
     st.subheader(f"🏆 الفائز المتوقع: :green[{predicted_winner}]")
 
 # ---------------------------------------------------------
-# مرحلة التدوين (بعد انتهاء السباق)
+# الجزء الثاني: تدوين البيانات (بعد السباق) - تم إلغاء القائمة المنسدلة لإظهار الخانات
 # ---------------------------------------------------------
-with st.expander("📝 تدوين النتائج (كشف الطرق المخفية)"):
-    st.write("أدخل البيانات الفعلية بعد الجولة لتدريب الخوارزمية:")
+st.divider()
+st.subheader("📝 تدوين نتائج الجولة (كشف الطرق المخفية)")
+st.write("أدخل البيانات الفعلية فور انتهاء الجولة:")
+
+# تحديد الطرق المخفية آلياً بناءً على المرئي
+others = [p for p in ["L", "C", "R"] if p != vis_pos]
+c_hid = st.columns(2)
+h1_type = c_hid[0].selectbox(f"نوع الطريق المخفي ({others[0]})", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h1")
+h2_type = c_hid[1].selectbox(f"نوع الطريق المخفي ({others[1]})", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h2")
+
+st.divider()
+col_res1, col_res2 = st.columns(2)
+lp_pos = col_res1.radio("موقع الطريق الأطول فعلياً", ["L", "C", "R"], horizontal=True)
+actual_winner = col_res2.selectbox("الفائز الفعلي", [v1, v2, v3])
+
+if st.button("✅ حفظ في السجل التاريخي وتدوين التوقع", use_container_width=True):
+    # ترتيب المسارات بشكل صحيح قبل الإرسال
+    roads = {vis_pos: vis_type, others[0]: h1_type, others[1]: h2_type}
     
-    # تحديد الطرق المخفية
-    others = [p for p in ["L", "C", "R"] if p != vis_pos]
-    c_hid = st.columns(2)
-    h1_type = c_hid
+    payload = {
+        "entry.1815594157": v1, 
+        "entry.1382952591": v2, 
+        "entry.734801074": v3,
+        "entry.189628538": roads["L"], 
+        "entry.725223032": roads["C"], 
+        "entry.1054834699": roads["R"],
+        "entry.21622378": lp_pos, 
+        "entry.77901429": actual_winner,
+        "entry.1017387431": predicted_winner  # تدوين التوقع في عمود Predicted Car
+    }
+    
+    try:
+        requests.post(FORM_URL, data=payload)
+        st.success(f"تم التسجيل بنجاح! التوقع ({predicted_winner}) ظهر الآن في العمود J.")
+        st.balloons()
+    except:
+        st.error("فشل في الاتصال، تأكد من الإنترنت.")
