@@ -6,58 +6,60 @@ import requests
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdtEDDxzbU8rHiFZCv72KKrosr49PosBVNUiRHnfNKSpC4RDg/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/1qzX6F4l4wBv6_cGvKLdUFayy1XDcg0QxjjEmxddxPTo/export?format=csv"
 
-st.set_page_config(page_title="Race Intelligence Pro V3", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="Race Intelligence Pro V3.1", layout="wide", page_icon="🧠")
 
 def fetch_data():
     try:
         url = f"{SHEET_READ_URL}&t={pd.Timestamp.now().timestamp()}"
         df_read = pd.read_csv(url)
-        # العمود التاسع (Index 8) هو الفائز الفعلي
-        return df_read.dropna(subset=[df_read.columns[8]])
+        # التأكد من وجود بيانات في عمود الفائز (Index 8) وعمود الموقع (Index 6)
+        df_clean = df_read.dropna(subset=[df_read.columns[6], df_read.columns[8]])
+        return df_clean
     except:
         return pd.DataFrame()
 
 df = fetch_data()
 
-# --- القائمة الجانبية الذكية ---
+# --- القائمة الجانبية المصلحة ---
 st.sidebar.title("🧠 عقل الخوارزمية")
 if not df.empty:
     total_races = len(df)
     st.sidebar.metric("🔢 إجمالي الجولات المسجلة", total_races)
     
-    # حساب الدقة (الربح الإجمالي)
+    # حساب الدقة مع معالجة الأخطاء (Safe Mode)
     correct_p = 0
     total_a = 0
-    for i in range(10, len(df)):
-        past = df.iloc[:i]
-        curr = df.iloc[i]
-        cars = [curr.iloc[0], curr.iloc[1], curr.iloc[2]]
-        actual = curr.iloc[8]
-        # محاكاة التوقع المعتمد على (الموقع الأطول + نوع الطريق في ذلك الموقع)
-        lp_pos = curr.iloc[6]
-        pos_map = {"L": 3, "C": 4, "R": 5}
-        rd_type = curr.iloc[pos_map[lp_pos]]
-        
-        match = past[(past.iloc[:, 6] == lp_pos) & (past.iloc[:, pos_map[lp_pos]] == rd_type)]
-        match = match[match.iloc[:, 8].isin(cars)]
-        
-        if not match.empty:
-            if match.iloc[:, 8].value_counts().idxmax() == actual:
-                correct_p += 1
-            total_a += 1
+    pos_map = {"L": 3, "C": 4, "R": 5}
     
-    accuracy = (correct_p / total_a * 100) if total_a > 0 else 0
+    for i in range(10, len(df)):
+        curr = df.iloc[i]
+        lp_pos = str(curr.iloc[6]).strip().upper() # تنظيف النص
+        
+        if lp_pos in pos_map:
+            past = df.iloc[:i]
+            cars = [str(curr.iloc[0]), str(curr.iloc[1]), str(curr.iloc[2])]
+            actual = str(curr.iloc[8])
+            rd_type = str(curr.iloc[pos_map[lp_pos]])
+            
+            # محاكاة التوقع
+            match = past[(past.iloc[:, 6] == lp_pos) & (past.iloc[:, pos_map[lp_pos]] == rd_type)]
+            match = match[match.iloc[:, 8].isin(cars)]
+            
+            if not match.empty:
+                if str(match.iloc[:, 8].value_counts().idxmax()) == actual:
+                    correct_p += 1
+                total_a += 1
+    
+    accuracy = (correct_p / total_a * 100) if total_a > 0 else 33.3
     st.sidebar.metric("🎯 نسبة الربح الحالية", f"{round(accuracy, 1)}%")
     st.sidebar.progress(min(accuracy/100, 1.0))
-    
-    if accuracy >= 90: st.sidebar.balloons()
 else:
     total_races = 0
 
 page = st.sidebar.radio("انتقل إلى:", ["🔮 محرك التنبؤ الخارق", "📊 مصفوفة البيانات والذكاء"])
 
 # ---------------------------------------------------------
-# الصفحة الأولى: التوقع المتقدم (V3)
+# الصفحة الأولى: التوقع المتقدم
 # ---------------------------------------------------------
 if page == "🔮 محرك التنبؤ الخارق":
     st.title("🚀 التوقع بناءً على الارتباط الشرطي")
@@ -65,9 +67,9 @@ if page == "🔮 محرك التنبؤ الخارق":
     with st.container(border=True):
         st.subheader("🏁 معطيات السباق الحالي")
         c_v = st.columns(3)
-        c1 = c_v[0].selectbox("السيارة 1 (اليسار)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key="p1")
-        c2 = c_v[1].selectbox("السيارة 2 (الوسط)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key="p2")
-        c3 = c_v[2].selectbox("السيارة 3 (اليمين)", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key="p3")
+        c1 = c_v[0].selectbox("السيارة 1", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key="p1")
+        c2 = c_v[1].selectbox("السيارة 2", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key="p2")
+        c3 = c_v[2].selectbox("السيارة 3", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key="p3")
         
         st.divider()
         c_t = st.columns(2)
@@ -77,26 +79,21 @@ if page == "🔮 محرك التنبؤ الخارق":
         if st.button("🧠 استخراج النتيجة الذهبية", use_container_width=True):
             if not df.empty:
                 pos_map = {"L": 3, "C": 4, "R": 5}
-                # الفلترة العميقة (الطريق الأطول + الموقع + النوع)
-                condition = (df.iloc[:, 6] == lp_pos) & (df.iloc[:, pos_map[lp_pos]] == lp_type)
-                match = df[condition & df.iloc[:, 8].isin([c1, c2, c3])]
+                match = df[(df.iloc[:, 6] == lp_pos) & (df.iloc[:, pos_map[lp_pos]] == lp_type)]
+                match = match[match.iloc[:, 8].isin([c1, c2, c3])]
                 
                 if not match.empty:
                     stats = match.iloc[:, 8].value_counts()
-                    best = stats.idxmax()
-                    conf = (stats.max() / stats.sum()) * 100
-                    st.success(f"🏆 الفائز المتوقع: **{best}**")
-                    st.write(f"📈 درجة الثقة: **{round(conf, 1)}%** (بناءً على حالات مماثلة)")
+                    st.success(f"🏆 الفائز المتوقع: **{stats.idxmax()}**")
+                    st.write(f"📈 درجة الثقة: **{round((stats.max()/stats.sum())*100, 1)}%**")
                 else:
-                    st.warning("⚠️ هذه الحالة دقيقة جداً ولم تحدث مسبقاً. سننتقل للتوقع العام...")
                     gen_match = df[df.iloc[:, 8].isin([c1, c2, c3])].iloc[:, 8]
                     if not gen_match.empty:
-                        st.info(f"تاريخياً، الأفضل بين هذه السيارات هو: **{gen_match.value_counts().idxmax()}**")
+                        st.info(f"تاريخياً، الأفضل هو: **{gen_match.value_counts().idxmax()}**")
             else:
                 st.error("القاعدة فارغة.")
 
-    with st.expander("💾 تسجيل جولة جديدة (للوصول للـ 95%)"):
-        st.info("دقة النظام تعتمد على دقة إدخالك للطريق الأطول (Long Path).")
+    with st.expander("💾 تسجيل جولة جديدة"):
         c_r = st.columns(3)
         rl = c_r[0].selectbox("L", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="rl")
         rc = c_r[1].selectbox("C", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="rc")
@@ -111,40 +108,27 @@ if page == "🔮 محرك التنبؤ الخارق":
                 "entry.21622378": lp_act, "entry.77901429": win_act
             }
             requests.post(FORM_URL, data=payload)
-            st.success("تم التغذية! الخوارزمية أصبحت أذكى الآن.")
+            st.success("تم التحديث!")
 
 # ---------------------------------------------------------
-# الصفحة الثانية: مصفوفة البيانات (المميزة)
+# الصفحة الثانية: مصفوفة البيانات
 # ---------------------------------------------------------
 elif page == "📊 مصفوفة البيانات والذكاء":
     st.title("📊 مصفوفة تحليل الخوارزمية")
-    
     if not df.empty:
-        # ميزة جديدة: مصفوفة القوة (أفضل سيارة لكل طريق)
         st.subheader("🔥 مصفوفة القوة: ملك الطريق")
-        st.write("هذا الجدول يخبرك بالسيارة التي تسيطر على كل نوع طريق بناءً على تجاربك:")
-        
-        # تحليل أفضل سيارة لكل نوع طريق (نجمع كل الأعمدة L, C, R)
         road_types = ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"]
         matrix_data = []
         for rt in road_types:
-            # البحث عن الجولات التي كان فيها هذا الطريق هو الأطول
             wins = []
             for pos in ["L", "C", "R"]:
-                pos_idx = {"L": 3, "C": 4, "R": 5}[pos]
-                matches = df[(df.iloc[:, 6] == pos) & (df.iloc[:, pos_idx] == rt)]
-                wins.extend(matches.iloc[:, 8].tolist())
-            
+                p_idx = {"L": 3, "C": 4, "R": 5}[pos]
+                m = df[(df.iloc[:, 6] == pos) & (df.iloc[:, p_idx] == rt)]
+                wins.extend(m.iloc[:, 8].tolist())
             if wins:
-                best_car = max(set(wins), key=wins.count)
-                matrix_data.append({"نوع الطريق": rt, "السيارة المسيطرة": best_car, "عدد الانتصارات": wins.count(best_car)})
+                best = max(set(wins), key=wins.count)
+                matrix_data.append({"نوع الطريق": rt, "السيارة المسيطرة": best, "الفوز": wins.count(best)})
             else:
-                matrix_data.append({"نوع الطريق": rt, "السيارة المسيطرة": "لا توجد بيانات", "عدد الانتصارات": 0})
-        
+                matrix_data.append({"نوع الطريق": rt, "السيارة المسيطرة": "نقص بيانات", "الفوز": 0})
         st.table(pd.DataFrame(matrix_data))
-        
-        st.divider()
-        st.subheader("📈 توزيع الأرباح العام")
         st.bar_chart(df.iloc[:, 8].value_counts())
-    else:
-        st.warning("بانتظار البيانات...")
