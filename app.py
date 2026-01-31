@@ -7,7 +7,7 @@ import time
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeTiFBlrWkSYGQmiNLaHT1ts4EpQoLaz6on_ovU1ngQROPmVA/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/18D0FRhBizVq_ipur_8fBSXjB2AAe49bZxKZ6-My4O9M/export?format=csv"
 
-st.set_page_config(page_title="Genius Race AI", layout="wide")
+st.set_page_config(page_title="Race Intelligence V28.1", layout="wide")
 
 @st.cache_data(ttl=1)
 def fetch_data():
@@ -20,44 +20,44 @@ def fetch_data():
 
 df = fetch_data()
 
-# --- خوارزمية كسر التشفير ---
-def deep_intelligence(v1, v2, v3, v_pos, v_type, data):
-    if data.empty or len(data) < 2:
-        return v1
+# --- خوارزمية البصمة المستقلة ---
+def fingerprint_logic(v1, v2, v3, v_pos, v_type, data):
+    if data.empty: return v1
+    current_cars = {v1, v2, v3}
+    pos_map = {"L": 4, "C": 5, "R": 6}
+    car_at_pos = v1 if v_pos == "L" else v2 if v_pos == "C" else v3
     
-    # 1. التنبؤ بالطريق القادم (Sequential Road Prediction)
-    last_road = data.iloc[-1, 4 if v_pos=="L" else 5 if v_pos=="C" else 6]
-    # البحث عن المرات التي ظهر فيها هذا الطريق سابقاً وماذا تبعه
-    next_road_probs = data[data.shift(1).iloc[:, 4 if v_pos=="L" else 5 if v_pos=="C" else 6] == last_road]
+    # فلترة المواجهات المتشابهة
+    mask_same_cars = data.apply(lambda row: {row.iloc[1], row.iloc[2], row.iloc[3]} == current_cars, axis=1)
+    mask_specific = (data.iloc[:, pos_map[v_pos]] == v_type) & \
+                    (data.iloc[:, 1 if v_pos=="L" else 2 if v_pos=="C" else 3] == car_at_pos)
     
-    # 2. تحليل "المسار الأطول" التاريخي
-    # هل هناك سيارة معينة تفوز دائماً عندما يكون مسارها هو الأطول؟
-    longer_path_history = data[data.iloc[:, 7] == v_pos] # العمود H هو Longer Path
+    scores = {v1: 0, v2: 0, v3: 0}
+    for _, row in data[mask_same_cars].iterrows(): scores[row.iloc[8]] += 2
+    for _, row in data[mask_specific].iterrows(): scores[row.iloc[8]] += 5
     
-    # 3. حساب الوزن (Scoring)
-    candidates = {v1: 0, v2: 0, v3: 0}
-    for c in candidates:
-        # وزن الفوز العام
-        candidates[c] += len(data[data.iloc[:, 8] == c]) * 1 
-        # وزن الفوز في هذا الطريق تحديداً
-        candidates[c] += len(data[(data.iloc[:, 4 if v_pos=="L" else 5 if v_pos=="C" else 6] == v_type) & (data.iloc[:, 8] == c)]) * 3
-    
-    return max(candidates, key=candidates.get)
+    prediction = max(scores, key=scores.get)
+    return prediction if scores[prediction] > 0 else v1
 
-# --- الواجهة ---
-st.title("🚀 محرك كسر خوارزمية السباق")
+# --- عرض الإحصائيات (نسبة الربح) ---
+st.title("🎯 نظام البصمة المستقلة (V28.1)")
 
 if not df.empty:
-    col_stat1, col_stat2 = st.columns(2)
-    with col_stat1:
-        st.metric("قوة الداتا التاريخية", f"{len(df)} جولة")
-    with col_stat2:
-        last_winner = df.iloc[-1, 8]
-        st.write(f"آخر فائز مسجل: **{last_winner}**")
+    total_rounds = len(df)
+    # حساب عدد المرات التي تطابق فيها التوقع مع الفائز الفعلي
+    # العمود 9 هو التوقع والعمود 8 هو الفائز الفعلي
+    correct_hits = len(df[df.iloc[:, 8] == df.iloc[:, 9]])
+    win_rate = (correct_hits / total_rounds) * 100 if total_rounds > 0 else 0
+
+    col1, col2 = st.columns(2)
+    col1.metric("إجمالي الجولات المسجلة", f"{total_rounds}")
+    col2.metric("دقة توقع النظام (Win Rate)", f"{win_rate:.1f}%", delta=f"{correct_hits} إصابة")
+else:
+    st.info("بانتظار تسجيل الجولات لبدء حساب نسبة الربح.")
 
 st.divider()
 
-# المدخلات
+# --- المدخلات والتوقع ---
 with st.container(border=True):
     c = st.columns(3)
     v1 = c[0].selectbox("السيارة L", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key="v1")
@@ -67,19 +67,19 @@ with st.container(border=True):
     vp = st.radio("الموقع المرئي", ["L", "C", "R"], horizontal=True)
     vt = st.selectbox("نوع الطريق المرئي", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
 
-    prediction = deep_intelligence(v1, v2, v3, vp, vt, df)
-    st.subheader(f"🔮 التوقع المبني على التراتبية: :green[{prediction}]")
+    prediction = fingerprint_logic(v1, v2, v3, vp, vt, df)
+    st.subheader(f"🔮 التوقع المقترح: :green[{prediction}]")
 
-# التسجيل
-with st.expander("📝 تسجيل بيانات لكسر الخوارزمية"):
+# --- التسجيل ---
+with st.expander("📥 تسجيل الجولة الحالية"):
     others = [p for p in ["L", "C", "R"] if p != vp]
     c_h = st.columns(2)
-    h1_t = c_h[0].selectbox(f"طريق {others[0]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
-    h2_t = c_h[1].selectbox(f"طريق {others[1]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
-    lp = st.radio("أيهما كان الطريق الأطول؟", ["L", "C", "R"], horizontal=True)
+    h1_t = c_h[0].selectbox(f"طريق {others[0]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h1")
+    h2_t = c_h[1].selectbox(f"طريق {others[1]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h2")
+    lp = st.radio("المسار الأطول", ["L", "C", "R"], horizontal=True)
     aw = st.selectbox("الفائز الفعلي", [v1, v2, v3])
 
-if st.button("🚀 معالجة وحفظ الجولة", use_container_width=True):
+if st.button("🚀 حفظ وتحديث البصمة", use_container_width=True):
     r_map = {vp: vt, others[0]: h1_t, others[1]: h2_t}
     payload = {
         "entry.159051415": str(v1), "entry.1682422047": str(v2), "entry.918899545": str(v3),
@@ -87,6 +87,6 @@ if st.button("🚀 معالجة وحفظ الجولة", use_container_width=True
         "entry.1719787271": str(lp), "entry.1625798960": str(aw), "entry.1007263974": str(prediction)
     }
     if requests.post(FORM_URL, data=payload).ok:
-        st.success("تم تحديث قاعدة البيانات!")
+        st.success("تم التحديث!")
         st.cache_data.clear()
         st.rerun()
