@@ -7,7 +7,7 @@ import time
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeTiFBlrWkSYGQmiNLaHT1ts4EpQoLaz6on_ovU1ngQROPmVA/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/18D0FRhBizVq_ipur_8fBSXjB2AAe49bZxKZ6-My4O9M/export?format=csv"
 
-st.set_page_config(page_title="Race Intelligence Pro", layout="wide", page_icon="🏎️")
+st.set_page_config(page_title="Race Intelligence Pro", layout="wide")
 
 @st.cache_data(ttl=1)
 def fetch_data():
@@ -19,7 +19,7 @@ def fetch_data():
 
 df = fetch_data()
 
-st.title("🧠 نظام تحليل السباقات الذكي (النسخة النهائية)")
+st.title("🧠 نظام تحليل السباقات الذكي")
 
 # --- واجهة الإدخال ---
 with st.container(border=True):
@@ -32,10 +32,9 @@ with st.container(border=True):
     vis_pos = st.radio("الموقع المرئي حالياً", ["L", "C", "R"], horizontal=True)
     vis_type = st.selectbox("نوع الطريق المرئي", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
 
-    # خوارزمية التوقع
     prediction = v1
     if not df.empty and df.shape[1] >= 10:
-        pos_map = {"L": 4, "C": 5, "R": 6} # مطابقة لأعمدة الشيت E, F, G
+        pos_map = {"L": 4, "C": 5, "R": 6}
         idx = pos_map[vis_pos]
         history = df[df.iloc[:, idx] == vis_type]
         if not history.empty:
@@ -56,28 +55,26 @@ c_res = st.columns(2)
 lp_pos = c_res[0].radio("المسار الأطول (Longer Path)", ["L", "C", "R"], horizontal=True)
 actual_w = c_res[1].selectbox("الفائز الفعلي", [v1, v2, v3])
 
+# تأكد من محاذاة هذا الجزء تماماً مع الحافة اليسرى بدون مسافات زائدة
 if st.button("🚀 إرسال البيانات وحفظها", use_container_width=True):
     r_map = {vis_pos: vis_type, others[0]: h1_t, others[1]: h2_t}
     
-    # هذا هو المفتاح السحري الذي سيملأ الخانات الفارغة في الصورة 1000101772.jpg
-payload = {
-    "entry.159051415": str(v1),        # Car 1
-    "entry.1682422047": str(v2),       # Car 2
-    "entry.918899545": str(v3),        # Car 3
-    "entry.401576858": str(r_map["L"]), # Road L
-    "entry.658789827": str(r_map["C"]), # Road C
-    "entry.1738752946": str(r_map["R"]), # Road R
-    "entry.1719787271": str(lp_pos),    # Longer Path
-    "entry.1625798960": str(actual_w),  # Actual Winner
-    "entry.1007263974": str(prediction) # Prediction
-}
-
+    payload = {
+        "entry.159051415": str(v1),
+        "entry.1682422047": str(v2),
+        "entry.918899545": str(v3),
+        "entry.401576858": str(r_map["L"]),
+        "entry.658789827": str(r_map["C"]),
+        "entry.1738752946": str(r_map["R"]),
+        "entry.1719787271": str(lp_pos),
+        "entry.1625798960": str(actual_w),
+        "entry.1007263974": str(prediction)
+    }
     
     try:
         response = requests.post(FORM_URL, data=payload)
         if response.ok:
-            st.success("✅ تم الاتصال بنجاح! السطر الجديد في الشيت سيمتلئ بالكامل.")
-            st.balloons()
+            st.success("✅ تم الإرسال! راجع الشيت الآن.")
             st.cache_data.clear()
         else:
             st.error(f"خطأ في الإرسال: {response.status_code}")
