@@ -59,18 +59,19 @@ actual_w = c_res[1].selectbox("الفائز الفعلي", [v1, v2, v3])
 if st.button("🚀 إرسال البيانات وحفظها", use_container_width=True):
     r_map = {vis_pos: vis_type, others[0]: h1_t, others[1]: h2_t}
     
-    # المعرفات الحقيقية التي استخرجناها من View Page Source
-    payload = {
-        "entry.159051415": str(v1),        # Car 1
-        "entry.1682422047": str(v2),       # Car 2
-        "entry.918899545": str(v3),        # Car 3
-        "entry.401576858": str(r_map["L"]), # Road L
-        "entry.658789827": str(r_map["C"]), # Road C
-        "entry.1738752946": str(r_map["R"]), # Road R
-        "entry.1719787271": str(lp_pos),    # Longer Path
-        "entry.1625798960": str(actual_w),  # Actual Winner
-        "entry.1007263974": str(prediction) # Prediction
-    }
+    # هذا هو المفتاح السحري الذي سيملأ الخانات الفارغة في الصورة 1000101772.jpg
+payload = {
+    "entry.159051415": str(v1),        # Car 1
+    "entry.1682422047": str(v2),       # Car 2
+    "entry.918899545": str(v3),        # Car 3
+    "entry.401576858": str(r_map["L"]), # Road L
+    "entry.658789827": str(r_map["C"]), # Road C
+    "entry.1738752946": str(r_map["R"]), # Road R
+    "entry.1719787271": str(lp_pos),    # Longer Path
+    "entry.1625798960": str(actual_w),  # Actual Winner
+    "entry.1007263974": str(prediction) # Prediction
+}
+
     
     try:
         response = requests.post(FORM_URL, data=payload)
