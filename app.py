@@ -4,118 +4,113 @@ import requests
 import time
 import streamlit.components.v1 as components
 
-# --- الروابط الرسمية ---
+# --- إعدادات الصفحة الأساسية ---
+st.set_page_config(page_title="Race Master V36.5", layout="wide", initial_sidebar_state="collapsed")
+
+# روابط البيانات (ثابتة)
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeTiFBlrWkSYGQmiNLaHT1ts4EpQoLaz6on_ovU1ngQROPmVA/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/18D0FRhBizVq_ipur_8fBSXjB2AAe49bZxKZ6-My4O9M/export?format=csv"
 
-st.set_page_config(page_title="Race Master V36.4", layout="wide")
-
-# دالة الصوت الهادئ
-def play_chime():
+# وظيفة الصوت
+def play_beep():
     components.html("<audio autoplay><source src='https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' type='audio/mpeg'></audio>", height=0)
 
 @st.cache_data(ttl=1)
-def fetch_data():
+def load_data():
     try:
-        url = f"{SHEET_READ_URL}&cache_buster={time.time()}"
-        df = pd.read_csv(url)
+        df = pd.read_csv(f"{SHEET_READ_URL}&cb={time.time()}")
         return df.dropna(subset=[df.columns[1], df.columns[8]])
     except: return pd.DataFrame()
 
-df = fetch_data()
+df = load_data()
 
-# --- محرك التحليل الذكي ---
-def core_logic(v1, v2, v3, vp, vt, data):
-    current_cars = [v1, v2, v3]
-    if data.empty: return v1, v2, "بانتظار البيانات", False
-    
+# --- محرك التحليل الديناميكي ---
+def get_prediction(v1, v2, v3, vp, vt, data):
+    if data.empty: return v1, v2, "جاري التحميل..", False
+    cars = [v1, v2, v3]
     pos_map = {"L": 4, "C": 5, "R": 6}
-    # التركيز على آخر 50 جولة (قانون الساعة)
-    fresh_df = data.tail(50)
     
-    scores = {v: 0.0 for v in current_cars}
-    for car in current_cars:
-        # وزن مرتفع جداً للأنماط الحديثة
-        f_match = len(fresh_df[(fresh_df.iloc[:, pos_map[vp]] == vt) & (fresh_df.iloc[:, 8] == car)])
-        scores[car] += f_match * 100.0
-        # وزن ثانوي للتاريخ
-        total_match = len(data[(data.iloc[:, pos_map[vp]] == vt) & (data.iloc[:, 8] == car)])
-        scores[car] += total_match * 0.5
+    # التركيز على آخر 60 جولة فقط (النمط الحي)
+    recent = data.tail(60)
+    scores = {v: 0.0 for v in cars}
+    
+    for c in cars:
+        # وزن النمط الحديث
+        scores[c] += len(recent[(recent.iloc[:, pos_map[vp]] == vt) & (recent.iloc[:, 8] == c)]) * 100
+        # وزن التاريخ العام
+        scores[c] += len(data[(data.iloc[:, pos_map[vp]] == vt) & (data.iloc[:, 8] == c)]) * 0.5
 
-    res_sorted = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    p1, p2 = res_sorted[0][0], res_sorted[1][0]
+    sorted_cars = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    p1, p2 = sorted_cars[0][0], sorted_cars[1][0]
     
-    # كاشف الانعكاس
-    last_10 = data.tail(10).iloc[:, 8].tolist()
-    if last_10.count(p2) > last_10.count(p1):
+    # فحص حالة "التبديل العكسي"
+    last_winners = data.tail(12).iloc[:, 8].tolist()
+    if last_winners.count(p2) > last_winners.count(p1):
         p1, p2 = p2, p1
-        status = "🔄 السيرفر يعكس النمط (حالة تبديل)"
-    else:
-        status = "🎯 نمط حديث مستقر"
+        msg = "🔄 تحذير: السيرفر يعكس التوقعات الآن"
+    else: msg = "🎯 النمط مستقر"
+    
+    is_bait = True if vt in ["bumpy", "potholes"] and ("Atv" in cars or "Moto" in cars) else False
+    return p1, p2, msg, is_bait
 
-    bait = True if vt in ["bumpy", "potholes"] and ("Atv" in current_cars or "Moto" in current_cars) else False
-    return p1, p2, status, bait
+# --- الواجهة الرسومية (UI) ---
+st.markdown("<h1 style='text-align: center; color: #4CAF50;'>🏆 رادار السباق الذكي V36.5</h1>", unsafe_allow_allow_html=True)
 
-# --- 📊 الهيدر الثابت (عداد الجولات والنسبة) ---
-st.title("🛡️ كونسول السيادة الرقمية V36.4")
-
+# 1. شريط الإحصائيات الثابت
 if not df.empty:
-    recent_eval = df.tail(30)
-    acc = (len(recent_eval[recent_eval.iloc[:, 8] == recent_eval.iloc[:, 9]]) / 30) * 100
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("📊 عداد الجولات الكلي", f"{len(df)}")
-    c2.metric("📈 نسبة الربح (آخر 30 جولة)", f"{acc:.1f}%")
-    c3.metric("📡 حالة المفاعل", "يعمل بكفاءة")
+    recent_30 = df.tail(30)
+    accuracy = (len(recent_30[recent_30.iloc[:, 8] == recent_30.iloc[:, 9]]) / 30) * 100
+    st.divider()
+    stat1, stat2, stat3 = st.columns(3)
+    stat1.metric("📊 إجمالي الجولات", len(df))
+    stat2.metric("📈 الدقة (آخر 30)", f"{accuracy:.1f}%")
+    stat3.metric("🟢 الحالة", "مباشر")
 
 st.divider()
 
-# --- 🏁 منطقة التوقع ---
+# 2. منطقة إدخال السباق
 with st.container(border=True):
-    st.subheader("تحليل السباق الحالي")
-    col_v = st.columns(3)
-    v1 = col_v[0].selectbox("السيارة L", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key="v1")
-    v2 = col_v[1].selectbox("السيارة C", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key="v2")
-    v3 = col_v[2].selectbox("السيارة R", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key="v3")
+    st.subheader("📍 بيانات السباق الحالي")
+    c1, c2, c3 = st.columns(3)
+    v1 = c1.selectbox("السيارة L", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='l')
+    v2 = c2.selectbox("السيارة C", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key='c')
+    v3 = c3.selectbox("السيارة R", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key='r')
     
-    col_r = st.columns([1, 2])
-    vp = col_r[0].radio("الموقع المعروف", ["L", "C", "R"], horizontal=True)
-    vt = col_r[1].selectbox("طريق الموقع المعروف", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
+    cx, cy = st.columns([1, 2])
+    vp = cx.radio("موقع الطريق المعروف", ["L", "C", "R"], horizontal=True)
+    vt = cy.selectbox("نوع الطريق", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
 
-    p1, p2, status, bait = core_logic(v1, v2, v3, vp, vt, df)
+    p1, p2, status_msg, bait = get_prediction(v1, v2, v3, vp, vt, df)
     
-    if bait: play_chime()
+    if bait: play_beep()
     
-    st.warning(status) if "🔄" in status else st.success(status)
-    
-    res = st.columns(2)
-    res[0].info(f"🥇 التوقع الأول: **{p1}**")
-    res[1].info(f"🥈 التوقع الثاني: **{p2}**")
+    st.info(status_msg)
+    res_l, res_r = st.columns(2)
+    res_l.success(f"🥇 التوقع الأول: {p1}")
+    res_r.warning(f"🥈 التوقع الثاني: {p2}")
 
 st.divider()
 
-# --- 📥 منطقة الترحيل الثابتة (لا تختفي) ---
-st.subheader("ترحيل البيانات الفوري")
+# 3. خانات الترحيل الثابتة (التغذية)
+st.subheader("📥 ترحيل النتيجة لتحديث المفاعل")
 with st.container(border=True):
     others = [p for p in ["L", "C", "R"] if p != vp]
-    c_h = st.columns(2)
-    h1 = c_h[0].selectbox(f"طريق {others[0]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h1")
-    h2 = c_h[1].selectbox(f"طريق {others[1]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="h2")
+    h_col = st.columns(2)
+    h1 = h_col[0].selectbox(f"طريق {others[0]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key='h1')
+    h2 = h_col[1].selectbox(f"طريق {others[1]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key='h2')
     
-    c_extra = st.columns(2)
-    lp = c_extra[0].radio("المسار الأطول الفعلي", ["L", "C", "R"], horizontal=True, key="lp")
-    aw = c_extra[1].selectbox("الفائز الفعلي", [v1, v2, v3], key="aw")
+    f_col = st.columns(2)
+    lp = f_col[0].radio("المسار الأطول", ["L", "C", "R"], horizontal=True)
+    aw = f_col[1].selectbox("الفائز الفعلي", [v1, v2, v3])
     
-    if st.button("🚀 ترحيل وحفظ الجولة", use_container_width=True):
-        r_map = {vp: vt, others[0]: h1, others[1]: h2}
+    if st.button("🚀 ترحيل وحفظ البيانات", use_container_width=True):
         payload = {
             "entry.159051415": v1, "entry.1682422047": v2, "entry.918899545": v3,
-            "entry.401576858": r_map["L"], "entry.658789827": r_map["C"], "entry.1738752946": r_map["R"],
             "entry.1719787271": lp, "entry.1625798960": aw, "entry.1007263974": p1
         }
         if requests.post(FORM_URL, data=payload).ok:
             st.balloons()
-            st.success("✅ تـم تـرحـيـل الـداتـا بـنـجـاح!")
-            time.sleep(1.5)
+            st.success("✅ تم الحفظ بنجاح! جاري تحديث الأوزان...")
+            time.sleep(1)
             st.cache_data.clear()
             st.rerun()
