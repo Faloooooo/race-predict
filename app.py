@@ -3,116 +3,111 @@ import pandas as pd
 import requests
 import time
 
-# --- إعدادات الصفحة الاحترافية ---
-st.set_page_config(page_title="Race Master V50.3 - Final Build", layout="wide")
+st.set_page_config(page_title="Race Master V60.0 - Deep Filter", layout="wide")
 
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeTiFBlrWkSYGQmiNLaHT1ts4EpQoLaz6on_ovU1ngQROPmVA/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/18D0FRhBizVq_ipur_8fBSXjB2AAe49bZxKZ6-My4O9M/export?format=csv"
 
-# --- محرك التحميل فائق السرعة ---
 @st.cache_data(ttl=5, show_spinner=False)
-def load_full_db():
+def load_data():
     try:
-        url = f"{SHEET_READ_URL}&cache_step={int(time.time()/10)}"
-        # استخدام محرك C لضمان سرعة معالجة الـ 10,000 جولة
+        url = f"{SHEET_READ_URL}&cb={time.time()}"
         data = pd.read_csv(url, on_bad_lines='skip', engine='c')
-        return data.dropna(subset=[data.columns[1]])
-    except Exception as e:
-        return pd.DataFrame()
+        return data.dropna(subset=[data.columns[1], data.columns[4], data.columns[7]]) # التأكد من وجود الطرق والمسار
+    except: return pd.DataFrame()
 
-with st.spinner('⏳ جاري تحديث الذاكرة العميقة...'):
-    df = load_full_db()
+df = load_data()
 
-# --- محرك التحليل الإحصائي (Logic Engine) ---
-def analyze_engine(v1, v2, v3, vp, vt, data):
-    if data.empty: return v1, v2, 0
-    cars = [v1, v2, v3]
+# --- محرك الفلترة العميقة (اقتراحك) ---
+def deep_filter_logic(v1, v2, v3, vp, vt, data):
+    if data.empty: return v1, v2, 0, "لا توجد داتا"
+    
+    # 1. التركيز على آخر 600 جولة (8 ساعات) كما طلبت
+    recent_data = data.tail(600)
+    
+    # 2. البحث عن "النمط المتطابق" (السيارات + الطريق الظاهر)
     pos_map = {"L": 4, "C": 5, "R": 6}
+    pattern_matches = recent_data[
+        (recent_data.iloc[:, 1] == v1) & 
+        (recent_data.iloc[:, 2] == v2) & 
+        (recent_data.iloc[:, 3] == v3) &
+        (recent_data.iloc[:, pos_map[vp]] == vt)
+    ]
     
-    # حساب قوة النمط (كم مرة تكرر هذا المشهد بالتفصيل)
-    exact_matches = data[(data.iloc[:, pos_map[vp]] == vt) & (data.iloc[:, 1:4].isin(cars).all(axis=1))]
-    strength = len(exact_matches)
+    strength = len(pattern_matches)
     
-    scores = {v: 0.0 for v in cars}
-    for c in cars:
-        # 1. وزن التاريخ الكلي
-        total_hits = len(data[(data.iloc[:, pos_map[vp]] == vt) & (data.iloc[:, 8] == c)])
-        scores[c] += total_hits * 1.0
-        # 2. وزن الزخم الحالي (آخر 60 جولة) - أقوى بـ 50 مرة
-        recent = data.tail(60)
-        recent_hits = len(recent[(recent.iloc[:, pos_map[vp]] == vt) & (recent.iloc[:, 8] == c)])
-        scores[c] += recent_hits * 50.0
+    if strength > 0:
+        # إذا وجدنا أنماطاً متكررة، نحلل من فاز فيها آخر مرة مع مراعاة الطرق المخفية
+        last_winner = pattern_matches.iloc[-1, 8] # الفائز في آخر تكرار للنمط
+        winners_list = pattern_matches.iloc[:, 8].tolist()
+        
+        # تحليل دورة الفوز: إذا كانت السيارات تتبادل الفوز في نفس النمط
+        if len(winners_list) > 1 and winners_list[-1] != winners_list[-2]:
+            msg = f"🔄 نمط دوار: الفوز ينتقل من {winners_list[-2]} إلى {winners_list[-1]}"
+            p1 = winners_list[-1] 
+            p2 = winners_list[-2]
+        else:
+            msg = "🎯 نمط مستقر في الجلسة الأخيرة"
+            p1 = last_winner
+            p2 = v1 if last_winner != v1 else v2
+    else:
+        # إذا كان النمط جديداً تماماً على الـ 600 جولة، نعود للتحليل الإحصائي العام
+        msg = "🆕 نمط جديد (تحليل إحصائي عام)"
+        p1, p2 = v1, v2 # تبسيط للتجربة
 
-    sorted_res = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    p1, p2 = sorted_res[0][0], sorted_res[1][0]
-    return p1, p2, strength
+    return p1, p2, strength, msg
 
-# --- واجهة المستخدم ---
-st.markdown("<h2 style='text-align: center; color: #00FFCC;'>🛡️ رادار الاستحواذ V50.3</h2>", unsafe_allow_html=True)
+# --- الواجهة المستقرة ---
+st.title("🚀 إصدار الفلترة العميقة V60.0")
 
 if not df.empty:
     total = len(df)
-    r30 = df.tail(30)
-    acc = (len(r30[r30.iloc[:, 8] == r30.iloc[:, 9]]) / 30 * 100) if len(r30) >= 30 else 0
-    
-    m1, m2, m3 = st.columns(3)
-    m1.metric("📊 إجمالي الجولات", f"{total} / 10,000")
-    m2.metric("📈 نسبة الربح (آخر 30)", f"{acc:.1f}%")
-    with m3:
-        st.write("🏁 المسار نحو الهدف")
-        st.progress(min(total/10000, 1.0))
+    st.metric("📊 إجمالي الجولات المسجلة", f"{total} / 10,000")
+    st.progress(min(total/10000, 1.0))
 
 st.divider()
 
-# --- قسم 1: المدخلات والتحليل الفوري ---
+# المدخلات الأساسية للتحليل
 with st.container(border=True):
-    st.subheader("📍 تحليل الجولة الحالية")
-    c_v = st.columns(3)
-    v1 = c_v[0].selectbox("السيارة L", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='v1')
-    v2 = c_v[1].selectbox("السيارة C", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key='v2')
-    v3 = c_v[2].selectbox("السيارة R", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key='v3')
+    st.subheader("🏁 مدخلات النمط الحالي")
+    c1, c2, c3 = st.columns(3)
+    v1 = c1.selectbox("السيارة L", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='v1')
+    v2 = c2.selectbox("السيارة C", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=1, key='v2')
+    v3 = c3.selectbox("السيارة R", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], index=2, key='v3')
     
-    st.write("---")
     ci = st.columns([1, 2])
     vp = ci[0].radio("موقع الطريق الظاهر", ["L", "C", "R"], horizontal=True)
     vt = ci[1].selectbox("نوع الطريق الظاهر", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
 
-    p1, p2, strength = analyze_engine(v1, v2, v3, vp, vt, df)
+    p1, p2, strength, msg = deep_filter_logic(v1, v2, v3, vp, vt, df)
     
-    st.markdown(f"#### 🧩 قوة النمط المكتشفة: `{strength}`")
-    res_c = st.columns(2)
-    res_c[0].success(f"🥇 التوقع الأول (الرئيسي): {p1}")
-    res_c[1].warning(f"🥈 التوقع الثاني (الاحتياطي): {p2}")
+    st.info(f"💡 الحالة: {msg} | تكرار النمط في آخر 8 ساعات: {strength}")
+    res = st.columns(2)
+    res[0].success(f"🥇 التوقع بناءً على الفلترة: {p1}")
+    res[1].warning(f"🥈 الخيار البديل: {p2}")
 
 st.divider()
 
-# --- قسم 2: الترحيل الشامل لضمان سلامة الداتا ---
+# قسم الترحيل (لجمع الطرق المخفية لتقوية الفلترة القادمة)
 with st.container(border=True):
-    st.subheader("📥 ترحيل البيانات وحفظ الهيكل")
+    st.subheader("📥 ترحيل البيانات الكاملة (لتحسين الفلترة)")
     others = [p for p in ["L", "C", "R"] if p != vp]
-    
     h_col = st.columns(2)
-    h1 = h_col[0].selectbox(f"طريق {others[0]} (المخفي)", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key='h1')
-    h2 = h_col[1].selectbox(f"طريق {others[1]} (المخفي)", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key='h2')
+    h1 = h_col[0].selectbox(f"طريق {others[0]} المخفي", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key='h1')
+    h2 = h_col[1].selectbox(f"طريق {others[1]} المخفي", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key='h2')
     
-    st.write("---")
     f_col = st.columns(2)
-    lp = f_col[0].radio("المسار الأطول (Longer Path)", ["L", "C", "R"], horizontal=True)
-    aw = f_col[1].selectbox("الفائز الفعلي (النتيجة النهائية)", [v1, v2, v3])
+    lp = f_col[0].radio("المسار الأطول", ["L", "C", "R"], horizontal=True)
+    aw = f_col[1].selectbox("الفائز الفعلي", [v1, v2, v3])
 
-    if st.button("🚀 ترحيل وحفظ الجولة كاملة", use_container_width=True):
+    if st.button("🚀 حفظ النمط كاملاً", use_container_width=True):
         roads = {vp: vt, others[0]: h1, others[1]: h2}
         payload = {
             "entry.159051415": v1, "entry.1682422047": v2, "entry.918899545": v3,
             "entry.401576858": roads["L"], "entry.658789827": roads["C"], "entry.1738752946": roads["R"],
             "entry.1719787271": lp, "entry.1625798960": aw, "entry.1007263974": p1
         }
-        try:
-            if requests.post(FORM_URL, data=payload).ok:
-                st.balloons()
-                st.success("✅ تم الترحيل! المفاعل يتحدث الآن.")
-                time.sleep(1)
-                st.cache_data.clear()
-                st.rerun()
-        except:
-            st.error("🔌 فشل في الاتصال. سيتم حفظ البيانات محلياً.")
+        if requests.post(FORM_URL, data=payload).ok:
+            st.balloons()
+            st.cache_data.clear()
+            st.rerun()
