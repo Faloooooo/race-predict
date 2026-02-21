@@ -4,7 +4,7 @@ import requests
 import time
 
 # 1. إعدادات الثبات المطلقة
-st.set_page_config(page_title="Race Master V74.0 - Final Fix", layout="wide")
+st.set_page_config(page_title="Race Master V75.0 - Ultimate Fix", layout="wide")
 
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeTiFBlrWkSYGQmiNLaHT1ts4EpQoLaz6on_ovU1ngQROPmVA/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/18D0FRhBizVq_ipur_8fBSXjB2AAe49bZxKZ6-My4O9M/export?format=csv"
@@ -19,21 +19,23 @@ def load_db():
 
 df = load_db()
 
-# --- العدادات السيادية (مثبتة في القمة) ---
+# --- العدادات السيادية مثبتة في القمة ---
 if not df.empty:
     total_rounds = len(df)
     recent_100 = df.tail(100)
+    # نستخدم iloc لضمان الوصول للأعمدة حتى لو تغيرت أسماؤها
     correct = len(recent_100[recent_100.iloc[:, 8] == recent_100.iloc[:, 9]])
     accuracy = (correct / len(recent_100)) * 100 if len(recent_100) > 0 else 0
     
     m1, m2, m3 = st.columns([1, 1, 2])
     m1.metric("📊 إجمالي الجولات", total_rounds)
     m2.metric("📈 نسبة الربح %", f"{accuracy:.1f}%")
-    m3.success(f"آخر تحديث: {df.iloc[-1].iloc[0]}") # استخدام الاندكس لضمان جلب التوقيت
+    m3.success(f"✅ آخر جولة مسجلة: {df.iloc[-1].iloc[0]}")
 st.divider()
 
 tab1, tab2 = st.tabs(["🚀 غرفة التوقع", "🔬 مختبر البحث الشامل"])
 
+# --- التاب الأول: غرفة العمليات ---
 with tab1:
     with st.container(border=True):
         st.subheader("🏁 مدخلات النمط")
@@ -46,7 +48,6 @@ with tab1:
         vp = ir[0].radio("موقع الظاهر", ["L", "C", "R"], horizontal=True, key='vp')
         vt = ir[1].selectbox("نوع الطريق الظاهر", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key='vt')
 
-    # --- منطقة التوقع (أحدث جولة أولاً) ---
     pos_map = {"L": 4, "C": 5, "R": 6}
     matches = df[(df.iloc[:, 1] == v1) & (df.iloc[:, 2] == v2) & (df.iloc[:, 3] == v3) & (df.iloc[:, pos_map[vp]] == vt)]
     
@@ -71,8 +72,7 @@ with tab1:
 
     st.divider()
 
-    # نموذج الترحيل
-    with st.form("secure_save_v74"):
+    with st.form("secure_save_v75"):
         st.subheader("📥 ترحيل وحفظ الجولة")
         others = [p for p in ["L", "C", "R"] if p != vp]
         h_cols = st.columns(2)
@@ -95,23 +95,29 @@ with tab1:
                 st.cache_data.clear()
                 st.rerun()
 
-# --- صفحة المختبر (التعديل الجوهري هنا) ---
+# --- التاب الثاني: محرك البحث (تم الإصلاح الجذري) ---
 with tab2:
-    st.header("🔬 محرك البحث (مختبر الأنماط)")
+    st.header("🔬 مختبر البحث التاريخي")
     if not df.empty:
         with st.container(border=True):
-            st.write("🔍 فلترة حسب السيارات الثلاث")
             sf = st.columns(3)
-            sv1 = sf[0].selectbox("سيارة L", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='sv1_f')
-            sv2 = sf[1].selectbox("سيارة C", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='sv2_f')
-            sv3 = sf[2].selectbox("سيارة R", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='sv3_f')
+            sv1 = sf[0].selectbox("سيارة L", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='sv1_final')
+            sv2 = sf[1].selectbox("سيارة C", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='sv2_final')
+            sv3 = sf[2].selectbox("سيارة R", ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"], key='sv3_final')
         
-        # البحث عن النمط
+        # فلترة البحث
         search_res = df[(df.iloc[:, 1] == sv1) & (df.iloc[:, 2] == sv2) & (df.iloc[:, 3] == sv3)]
         
-        st.write(f"🔎 الجولات المكتشفة: **{len(search_res)}**")
+        st.write(f"🔎 عدد الجولات المطابقة للسيارات الثلاث: **{len(search_res)}**")
+        
         if not search_res.empty:
-            # عرض الأعمدة: السيارات (1,2,3)، الطرق (4,5,6)، المسار (7)، الفائز (8)
-            # ترتيب صريح للأعمدة لضمان ظهور "نوع الطريق ومكانه"
-            final_view = search_res.copy()
-            final_view.columns = ['التاريخ', 'L_Car', 'C_Car', 'R_Car', 'Road_L', 'Road_C', 'Road_R', 'Longer_Path', 'Winner',
+            # تجهيز نسخة للعرض بأسماء أعمدة واضحة جداً
+            final_display = search_res.iloc[:, [0, 4, 5, 6, 7, 8]].copy()
+            final_display.columns = ['التوقيت', 'طريق يسار (L)', 'طريق منتصف (C)', 'طريق يمين (R)', 'المسار الأطول', 'الفائز الفعلي']
+            
+            # عرض الجدول مع المسامير المثبتة
+            st.dataframe(final_display, use_container_width=True)
+            
+            st.info("📌 الجدول أعلاه يوضح نوع الطريق في كل جهة (L, C, R) لكل جولة ظهرت فيها هذه السيارات.")
+        else:
+            st.warning("لم يتم العثور على جولات سابقة لهذه السيارات الثلاث معاً.")
