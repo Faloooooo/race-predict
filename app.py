@@ -2,9 +2,8 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
-from datetime import datetime
 
-st.set_page_config(page_title="Race Master V66 - The Truth Test", layout="wide")
+st.set_page_config(page_title="Race Master V66.2 - Ultimate Stability", layout="wide")
 
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeTiFBlrWkSYGQmiNLaHT1ts4EpQoLaz6on_ovU1ngQROPmVA/formResponse"
 SHEET_READ_URL = "https://docs.google.com/spreadsheets/d/18D0FRhBizVq_ipur_8fBSXjB2AAe49bZxKZ6-My4O9M/export?format=csv"
@@ -19,96 +18,89 @@ def load_data():
 
 df = load_data()
 
-# --- الرأس والعدادات ---
-with st.container():
-    if not df.empty:
-        total = len(df)
-        # دقة آخر 50 جولة (مقياس كفاءة الموجة الحالية)
-        recent_df = df.tail(50)
-        recent_acc = (len(recent_df[recent_df.iloc[:, 8] == recent_df.iloc[:, 9]]) / 50) * 100
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("📊 السجل الإجمالي", f"{total} جولة")
-        c2.metric("🌊 دقة الموجة الأخيرة", f"{recent_acc:.1f}%")
-        c3.info("🎯 الحالة: مراقبة الأنماط النشطة")
+# العدادات العلوية
+if not df.empty:
+    c1, c2, c3 = st.columns(3)
+    c1.metric("📊 سجل الجولات", len(df))
+    c2.metric("🎯 الدقة", f"{(len(df[df.iloc[:, 8] == df.iloc[:, 9]])/len(df))*100:.1f}%")
+    c3.info(f"آخر تحديث: {time.strftime('%H:%M:%S')}")
 
 st.divider()
 
-tab_radar, tab_search = st.tabs(["🎯 رادار الحسم", "🔬 مختبر التحليل"])
+tab1, tab2 = st.tabs(["🚀 الرادار والترحيل", "🔬 مختبر البحث"])
 
-with tab_radar:
-    # 1. إدخال المعطيات الظاهرة
-    with st.container():
-        st.subheader("🏁 مدخلات ما قبل السباق")
-        cars_list = ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"]
-        
-        ca, cb, cc = st.columns(3)
-        v1 = ca.selectbox("السيارة L", cars_list, index=0, key="v1")
-        v2 = cb.selectbox("السيارة C", cars_list, index=1, key="v2")
-        v3 = cc.selectbox("السيارة R", cars_list, index=2, key="v3")
-        
-        cd, ce = st.columns([1, 2])
-        vp = cd.radio("الموقع الظاهر", ["L", "C", "R"], horizontal=True, key="vp")
-        vt = ce.selectbox("طريق الظاهر", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="vt")
-
-    # 2. محرك التوقع (المخ الرقمي)
-    pos_map = {"L": 4, "C": 5, "R": 6}
-    # فلترة البيانات بناءً على النمط
-    matches = df[(df.iloc[:, 1] == v1) & (df.iloc[:, 2] == v2) & (df.iloc[:, 3] == v3) & (df.iloc[:, pos_map[vp]] == vt)]
+with tab1:
+    # --- الجزء الأول: إدخال المعطيات ---
+    st.subheader("🏁 معطيات ما قبل السباق")
+    cars = ["Car", "Sport", "Super", "Bigbike", "Moto", "Orv", "Suv", "Truck", "Atv"]
     
-    st.write("---")
-    if not matches.empty:
-        # إعطاء ثقل أكبر لآخر 5 جولات ظهر فيها هذا النمط
-        recent_matches = matches.tail(5)
-        p1 = matches.iloc[:, 8].value_counts().index[0] # الأكثر تكراراً تاريخياً
-        p2 = recent_matches.iloc[-1, 8] if not recent_matches.empty else v2 # آخر فائز في هذا النمط
+    with st.container(border=True):
+        col1, col2, col3 = st.columns(3)
+        v1 = col1.selectbox("السيارة L", cars, index=0, key="v1")
+        v2 = col2.selectbox("السيارة C", cars, index=1, key="v2")
+        v3 = col3.selectbox("السيارة R", cars, index=2, key="v3")
         
-        r1, r2 = st.columns(2)
-        r1.markdown(f"<div style='text-align:center; border:3px solid #00FFCC; padding:15px; border-radius:15px;'><h4 style='margin:0;'>🥇 الاستراتيجية التاريخية</h4><h2 style='color:#00FFCC;'>{p1}</h2><small>بناءً على تكرار الـ 1853 جولة</small></div>", unsafe_allow_html=True)
-        r2.markdown(f"<div style='text-align:center; border:3px solid #FFCC00; padding:15px; border-radius:15px;'><h4 style='margin:0;'>🥈 استراتيجية الموجة</h4><h2 style='color:#FFCC00;'>{p2}</h2><small>بناءً على آخر سلوك للسيرفر</small></div>", unsafe_allow_html=True)
+        col4, col5 = st.columns([1, 2])
+        vp = col4.radio("الموقع الظاهر", ["L", "C", "R"], horizontal=True, key="vp")
+        vt = col5.selectbox("طريق الظاهر", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"], key="vt")
         
-        if p1 == p2:
-            st.success(f"🔥 **تطابق كامل:** الاستراتيجيتان تتفقان على {p1}. نسبة الثقة عالية.")
-        else:
-            st.warning(f"⚠️ **تذبذب في الموجة:** التاريخ يرجح {p1} ولكن السيرفر اتجه مؤخراً لـ {p2}.")
-    else:
-        p1 = v1
-        st.info("🆕 نمط غير مسجل مسبقاً. بانتظار تدوينك لبناء الذاكرة.")
+        # كبسة القفل لمنع قفز الشاشة
+        lock_btn = st.checkbox("🔓 قفل المعطيات وتحليل النمط", key="lock")
 
-    st.write("")
-    
-    # 3. ترحيل البيانات (البراغي المثبتة)
-    with st.form("save_race"):
-        st.subheader("📥 تسجيل النتيجة النهائية")
-        others = [p for p in ["L", "C", "R"] if p != vp]
-        h_a, h_b = st.columns(2)
-        h1 = h_a.selectbox(f"طريق {others[0]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
-        h2 = h_b.selectbox(f"طريق {others[1]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
+    if lock_btn:
+        # --- الجزء الثاني: التوقعات (تظهر فقط بعد القفل) ---
+        pos_map = {"L": 4, "C": 5, "R": 6}
+        matches = df[(df.iloc[:, 1] == v1) & (df.iloc[:, 2] == v2) & (df.iloc[:, 3] == v3) & (df.iloc[:, pos_map[vp]] == vt)]
         
-        f_a, f_b = st.columns(2)
-        lp = f_a.radio("المسار الأطول LP", ["L", "C", "R"], horizontal=True)
-        aw = f_b.selectbox("الفائز الفعلي", [v1, v2, v3])
+        p1 = matches.iloc[:, 8].value_counts().index[0] if not matches.empty else v1
+        p2 = matches.iloc[-1, 8] if not matches.empty else v2
         
-        if st.form_submit_button("🚀 ترحيل وتحديث الذكاء", use_container_width=True):
+        st.write("### 🎯 التوقعات الاستراتيجية")
+        res1, res2 = st.columns(2)
+        res1.info(f"🥇 أساسي: **{p1}**")
+        res2.warning(f"🥈 ثانوي: **{p2}**")
+
+        st.divider()
+
+        # --- الجزء الثالث: الترحيل (داخل Form لثبات مطلق) ---
+        with st.form("final_save_form"):
+            st.subheader("📥 ترحيل الداتا بعد نهاية الجولة")
+            others = [p for p in ["L", "C", "R"] if p != vp]
+            h_col1, h_col2 = st.columns(2)
+            h1 = h_col1.selectbox(f"طريق {others[0]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
+            h2 = h_col2.selectbox(f"طريق {others[1]}", ["desert", "highway", "bumpy", "expressway", "dirt", "potholes"])
+            
+            f_col1, f_col2 = st.columns(2)
+            lp = f_col1.radio("المسار الأطول LP", ["L", "C", "R"], horizontal=True)
+            aw = f_col2.selectbox("الفائز الفعلي", [v1, v2, v3])
+            
+            submit = st.form_submit_button("🚀 ترحيل البيانات الآن", use_container_width=True)
+
+        if submit:
             roads = {vp: vt, others[0]: h1, others[1]: h2}
             payload = {
                 "entry.159051415": v1, "entry.1682422047": v2, "entry.918899545": v3,
                 "entry.401576858": roads["L"], "entry.658789827": roads["C"], "entry.1738752946": roads["R"],
                 "entry.1719787271": lp, "entry.1625798960": aw, "entry.1007263974": p1
             }
-            if requests.post(FORM_URL, data=payload).ok:
-                st.balloons()
-                st.cache_data.clear()
-                st.rerun()
+            try:
+                res = requests.post(FORM_URL, data=payload)
+                if res.ok:
+                    st.success(f"✅ تم التأكيد: تم ترحيل الجولة رقم {len(df)+1} بنجاح في تمام {time.strftime('%H:%M:%S')}")
+                    st.balloons()
+                    time.sleep(2)
+                    st.cache_data.clear()
+                    # لا نقوم بعمل rerun تلقائي للسماح للمستخدم برؤية الرسالة
+                else:
+                    st.error("❌ فشل الترحيل: خطأ في السيرفر")
+            except:
+                st.error("❌ فشل الترحيل: تأكد من الاتصال بالإنترنت")
 
-with tab_search:
-    st.subheader("🔬 مختبر تحليل الأنماط")
-    # أدوات بحث مستقلة تماماً
-    s_col = st.columns(3)
-    s1 = s_col[0].selectbox("سيارة L", cars_list, key="s1")
-    s2 = s_col[1].selectbox("سيارة C", cars_list, key="s2")
-    s3 = s_col[2].selectbox("سيارة R", cars_list, key="s3")
-    
-    res_df = df[(df.iloc[:, 1] == s1) & (df.iloc[:, 2] == s2) & (df.iloc[:, 3] == s3)]
-    st.write(f"🔍 تم العثور على {len(res_df)} جولة مشابهة")
-    st.dataframe(res_df, use_container_width=True)
+with tab2:
+    st.subheader("🔬 مختبر البحث التاريخي")
+    # مدخلات بحث مستقلة
+    sa, sb, sc = st.columns(3)
+    search_df = df[(df.iloc[:, 1] == sa.selectbox("L", cars, key="s1")) & 
+                   (df.iloc[:, 2] == sb.selectbox("C", cars, key="s2")) & 
+                   (df.iloc[:, 3] == sc.selectbox("R", cars, key="s3"))]
+    st.dataframe(search_df, use_container_width=True)
